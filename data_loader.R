@@ -1,5 +1,5 @@
 # read data from csv file
-dat = read.csv("D:\\Studia\\MGR\\SEM_2\\MOW\\projekt\\repo\\FifaPlayersClassification\\data1.csv", header = TRUE, sep = '#')
+dat = read.csv("C:\\Users\\£ukasz\\Desktop\\RTut\\FifaPlayersClassification\\data1.csv", header = TRUE, sep = '#')
 # remove rows with empty features
 dat_without_empty <- na.omit(dat)
 dat_rows <- nrow(dat)
@@ -70,7 +70,7 @@ plot(fit, uniform=TRUE,
 text(fit, use.n=TRUE, all=TRUE, cex=.8)
 
 # create attractive postscript plot of tree 
-post(fit, file = "D:\\Studia\\MGR\\SEM_2\\MOW\\projekt\\tree.ps", 
+post(fit, file = "C:\\Users\\£ukasz\\Desktop\\RTut\\FifaPlayersClassification\\tree.ps", 
      title = "Classification Tree")
 
 # prune the tree 
@@ -104,12 +104,47 @@ convert_to_numeric_value <- function(amount) {
     return (numeric)
 }
 
+convert_weight_values <- function(amount) {
+  numeric = as.numeric(substr(amount,1,nchar(amount)-3))
+  return (numeric)
+}
+
 # convert wage and value column
 wages = strsplit(as.character(dat$Wage), "")
 values = strsplit(as.character(dat$Value), "")
 wages_converted <- matrix((sapply(wages, convert_to_numeric_value)), nrow(dat), 1)
 values_converted <- matrix((sapply(values, convert_to_numeric_value)), nrow(dat), 1)
-dat$Wage <- wages_converted
-dat$Value <- values_converted
+
+#changed this to be numeric values instead of list which cannot be used in training model
+dataset$Wage <- do.call(rbind, wages_converted)
+dataset$Value <- do.call(rbind, values_converted)
+
+#delete lbs from weight
+weights = as.character(dat$Weight)
+weights_converted <- matrix((sapply(weights, convert_weight_values)), nrow(dat), 1)
+dat$Weight <- weights_converted
+
+#copy of dataset
+dataset1 <- dataset
+
+#proposed columns to delete
+dataset1[, c("ï.¿", "ID", "Name", "Photo", "Flag", "Club.Logo", "Joined", "Nationality",
+            "Club", "Real.Face", "Loaned.From", "Contract.Valid.Until", "Jersey.Number", "Special", "Release.Clause")] = NULL
+
+#Value and Wage gives Error in x[, i] <- frame[[i]] : number of items to replace is not a multiple of replacement length
+#and cannot train randomForest
+dataset1[, c("Value", "Wage")] = NULL
+
+#Remove all factor type values that have more than 53 categories
+dataset1[, c("LS", "ST", "RS", "LW", "LF", "CF", "RF", "RW", "LAM", "CAM", "RAM", "LM", "LCM", "CM", "RCM", "RM", "LWB", "LDM", "CDM", "RDM"
+             , "RWB", "LB", "LCB", "CB", "RCB", "RB", "Height")] = NULL
+
+library(randomForest)
+library(rpart.plot)
+
+
+forest <- randomForest(Label ~., data=dataset1)
+rpart.plot(forest)
+
 
 
