@@ -1,5 +1,7 @@
 # read data from csv file
-dat = read.csv("data1.csv", header = TRUE, sep = '#')
+dat = read.csv("D:\\Studia\\MGR\\SEM_2\\MOW\\projekt\\repo\\FifaPlayersClassification\\data1.csv", header = TRUE, sep = '#')
+# remove rows with empty features
+dat_without_empty <- na.omit(dat)
 dat_rows <- nrow(dat)
 # calculate 80 centil of Overall feature
 centil_80 = quantile(dat$Overall, seq(0,1, 0.20))[5]
@@ -19,6 +21,7 @@ dat <- dat[,-8]
 dataset = cbind(dat, labels_mx)
 colnames(dataset)[89] <- "Label"
 
+# Naive Bayes Classification
 library(e1071)
 
 # fit the Naive Bayes model with the whole dataset
@@ -48,4 +51,65 @@ precision <- (prec1 + prec2) / 2
 ok_predictions <- conf_mx[1,1] + conf_mx[2,2]
 # micro_averaged accuracy = 0.917 for fitting on full dataset and before feature selection
 accuracy_micro <- ok_predictions/nrow(dataset)
+
+
+# Decision Tree simple classification
+library(rpart)
+
+# grow tree 
+fit <- rpart(Label ~.,
+             method="class", data=dataset)
+
+printcp(fit) # display the results 
+plotcp(fit) # visualize cross-validation results 
+summary(fit) # detailed summary of splits
+
+# plot tree 
+plot(fit, uniform=TRUE, 
+     main="Classification Tree")
+text(fit, use.n=TRUE, all=TRUE, cex=.8)
+
+# create attractive postscript plot of tree 
+post(fit, file = "D:\\Studia\\MGR\\SEM_2\\MOW\\projekt\\tree.ps", 
+     title = "Classification Tree")
+
+# prune the tree 
+pfit<- prune(fit, cp=   fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
+
+# plot the pruned tree 
+plot(pfit, uniform=TRUE, 
+     main="Pruned Classification Tree for Kyphosis")
+text(pfit, use.n=TRUE, all=TRUE, cex=.8)
+post(pfit, file = "c:/ptree.ps", 
+     title = "Pruned Classification Tree for Kyphosis")
+
+#corelation between numerical features
+mx = cbind(dat$Age, dat$Potential, dat$Height, dat$Overall)
+correlation_mx = cor(mx)
+
+
+# convertion of factor feature to numeric value
+convert_to_numeric_value <- function(amount) {
+  if (length(amount) > 3) {
+    without_euro_sign = tail(amount, -3)
+    if (tail(without_euro_sign, 1) == "K")
+      numeric = as.numeric(paste(head(without_euro_sign, -1), collapse = ""))*1000
+    else if (tail(without_euro_sign, 1) == "M")
+      numeric = as.numeric(paste(head(without_euro_sign, -1), collapse = ""))*1000000
+    else
+      numeric = as.numeric(without_euro_sign)
+  }
+  else
+    numeric = as.numeric(paste(amount, collapse = ""))
+    return (numeric)
+}
+
+# convert wage and value column
+wages = strsplit(as.character(dat$Wage), "")
+values = strsplit(as.character(dat$Value), "")
+wages_converted <- matrix((sapply(wages, convert_to_numeric_value)), nrow(dat), 1)
+values_converted <- matrix((sapply(values, convert_to_numeric_value)), nrow(dat), 1)
+dat$Wage <- wages_converted
+dat$Value <- values_converted
+
 
