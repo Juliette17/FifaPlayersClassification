@@ -204,26 +204,29 @@ plot_journal_roc
 
 
 ######################### badania drzew
-
-fit <- rpart(Label ~., data=dataset1,
-             control=rpart.control(xval = 100))
-
-pred_tree = predict(fit, dataset1, type="class")
-
-conf_mx <- table(pred_tree,dataset1$Label)
-acc1 <- conf_mx[1,1]/(conf_mx[1,1] + conf_mx[1,2]) #bad
-acc2 <- conf_mx[2,2]/(conf_mx[2,2] + conf_mx[2,1]) #good
-accuracy <- (acc1 + acc2) / 2
-prec1 <- conf_mx[1,1] / (conf_mx[1,1] + conf_mx[2,1])
-prec2 <- conf_mx[2,2] / (conf_mx[2,2] + conf_mx[1,2])
-precision <- (prec1 + prec2) / 2
-ok_predictions <- conf_mx[1,1] + conf_mx[2,2]
-accuracy_micro <- ok_predictions/nrow(dataset1)
-
-roc_estimate <- calculate_roc(pred_tree, dataset1$Label)
-single_rocplot <- ggroc(roc_estimate)
-plot_journal_roc(single_rocplot)
-auc_value <- calc_auc(single_rocplot)[1, "AUC"]
+output <- NULL
+for (param in 1:100){
+  fit <- rpart(Label ~., data=dataset1,
+               control=rpart.control(maxdepth = param))
+  
+  pred_tree = predict(fit, dataset1, type="class")
+  
+  conf_mx <- table(pred_tree,dataset1$Label)
+  acc1 <- conf_mx[1,1]/(conf_mx[1,1] + conf_mx[1,2]) #bad
+  acc2 <- conf_mx[2,2]/(conf_mx[2,2] + conf_mx[2,1]) #good
+  accuracy <- (acc1 + acc2) / 2
+  prec1 <- conf_mx[1,1] / (conf_mx[1,1] + conf_mx[2,1])
+  prec2 <- conf_mx[2,2] / (conf_mx[2,2] + conf_mx[1,2])
+  precision <- (prec1 + prec2) / 2
+  ok_predictions <- conf_mx[1,1] + conf_mx[2,2]
+  accuracy_micro <- ok_predictions/nrow(dataset1)
+  
+  roc_estimate <- calculate_roc(pred_tree, dataset1$Label)
+  single_rocplot <- ggroc(roc_estimate)
+  #plot_journal_roc(single_rocplot)
+  auc_value <- calc_auc(single_rocplot)[1, "AUC"]
+  output = rbind(output, data.frame(accuracy, accuracy_micro, precision))
+}
 
 
 
