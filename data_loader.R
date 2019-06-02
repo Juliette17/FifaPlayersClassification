@@ -25,11 +25,11 @@ colnames(dataset)[89] <- "Label"
 library(e1071)
 
 # fit the Naive Bayes model with the whole dataset
-Naive_Bayes_Model=naiveBayes(Label ~., data=dataset)
+Naive_Bayes_Model=naiveBayes(Label ~., data=dataset1)
 # predict on the same dataset
-NB_Predictions=predict(Naive_Bayes_Model, dataset)
+NB_Predictions=predict(Naive_Bayes_Model, dataset1)
 # confusion matrix to check accuracy
-conf_mx <- table(NB_Predictions,dataset$Label)
+conf_mx <- table(NB_Predictions,dataset1$Label)
 
 #macro-averaging
 # accuracy for class 'bad' = 0.9786
@@ -50,7 +50,7 @@ precision <- (prec1 + prec2) / 2
 # number of good predictions
 ok_predictions <- conf_mx[1,1] + conf_mx[2,2]
 # micro_averaged accuracy = 0.917 for fitting on full dataset and before feature selection
-accuracy_micro <- ok_predictions/nrow(dataset)
+accuracy_micro <- ok_predictions/nrow(dataset1)
 
 
 # Decision Tree simple classification
@@ -58,7 +58,9 @@ library(rpart)
 
 # grow tree 
 fit <- rpart(Label ~.,
-             method="class", data=dataset)
+             method="class", data=dataset1)
+
+fit_predict = predict(fit, dataset1)
 
 printcp(fit) # display the results 
 plotcp(fit) # visualize cross-validation results 
@@ -129,7 +131,9 @@ dataset1 <- dataset
 
 #proposed columns to delete
 dataset1[, c("ï.¿", "ID", "Name", "Photo", "Flag", "Club.Logo", "Joined", "Nationality",
-            "Club", "Real.Face", "Loaned.From", "Contract.Valid.Until", "Jersey.Number", "Special", "Release.Clause")] = NULL
+            "Club", "Real.Face", "Loaned.From", "Contract.Valid.Until", "Jersey.Number", "Special", "Release.Clause", "Potential")] = NULL
+
+
 
 #Value and Wage gives Error in x[, i] <- frame[[i]] : number of items to replace is not a multiple of replacement length
 #and cannot train randomForest
@@ -144,7 +148,53 @@ library(rpart.plot)
 
 
 forest <- randomForest(Label ~., data=dataset1)
-rpart.plot(forest)
+
+forest_predictions = predict(forest, dataset1)
+
+# confusion matrix to check accuracy
+conf_mx <- table(pred_rf,dataset1$Label)
+
+#macro-averaging
+# accuracy for class 'bad' = 0.9786
+acc1 <- conf_mx[1,1]/(conf_mx[1,1] + conf_mx[1,2]) #bad
+# accuracy for class 'good' = 0.7066
+acc2 <- conf_mx[2,2]/(conf_mx[2,2] + conf_mx[2,1]) #good
+# macro-averaged accuracy = 0.8426 for fitting on full dataset and before feature selection
+accuracy <- (acc1 + acc2) / 2
+
+#0.91937
+prec1 <- conf_mx[1,1] / (conf_mx[1,1] + conf_mx[2,1])
+#0.9063
+prec2 <- conf_mx[2,2] / (conf_mx[2,2] + conf_mx[1,2])
+#0.9128429
+precision <- (prec1 + prec2) / 2
+
+#micro-averaging
+# number of good predictions
+ok_predictions <- conf_mx[1,1] + conf_mx[2,2]
+# micro_averaged accuracy = 0.917 for fitting on full dataset and before feature selection
+accuracy_micro <- ok_predictions/nrow(dataset1)
+
+plot(forest)
+varImp(forest)
+
+
+#ROC plot
+library("plotROC")
+
+#divide whole set to 2 parts 
+inds <- createDataPartition(dataset1$Label, p = 0.75)
+training_set <- dataset1[inds[[1]],]
+test_set  <- dataset1[-inds[[1]],]
+
+
+rf <- randomForest(Label ~., data=training_set)
+pred_rf <- predict(rf, test_set)
+
+roc.estimate <- calculate_roc(pred_rf, dataset1$Label)
+single.rocplot <- ggroc(roc.estimate)
+plot_journal_roc(single.rocplot)
+
 
 
 
