@@ -69,7 +69,7 @@ correlation_mx = cor(mx)
 dataset1 <- dataset
 
 #proposed columns to delete
-dataset1[, c("?.?", "ID", "Name", "Photo", "Flag", "Club.Logo", "Joined", "Nationality",
+dataset1[, c("ID", "Name", "Photo", "Flag", "Club.Logo", "Joined", "Nationality",
             "Club", "Real.Face", "Loaned.From", "Contract.Valid.Until", "Jersey.Number", "Special", "Release.Clause")] = NULL
 dataset1[, 1] = NULL
 #Value and Wage gives Error in x[, i] <- frame[[i]] : number of items to replace is not a multiple of replacement length
@@ -139,50 +139,12 @@ plot(pfit, uniform=TRUE,
      main="Pruned Classification Tree")
 text(pfit, use.n=TRUE, all=TRUE, cex=.8)
 
-convert_weight_values <- function(amount) {
-  numeric = as.numeric(substr(amount,1,nchar(amount)-3))
-  return (numeric)
-}
-
-# convert wage and value column
-wages = strsplit(as.character(dat$Wage), "")
-values = strsplit(as.character(dat$Value), "")
-wages_converted <- matrix((sapply(wages, convert_to_numeric_value)), nrow(dat), 1)
-values_converted <- matrix((sapply(values, convert_to_numeric_value)), nrow(dat), 1)
-
-#changed this to be numeric values instead of list which cannot be used in training model
-dataset$Wage <- do.call(rbind, wages_converted)
-dataset$Value <- do.call(rbind, values_converted)
-
-#delete lbs from weight
-weights = as.character(dat$Weight)
-weights_converted <- matrix((sapply(weights, convert_weight_values)), nrow(dat), 1)
-dat$Weight <- weights_converted
-
-#copy of dataset
-dataset1 <- dataset
-
-#proposed columns to delete
-dataset1[, c("�.�", "ID", "Name", "Photo", "Flag", "Club.Logo", "Joined", "Nationality",
-            "Club", "Real.Face", "Loaned.From", "Contract.Valid.Until", "Jersey.Number", "Special", "Release.Clause", "Potential")] = NULL
-
-
-
-#Value and Wage gives Error in x[, i] <- frame[[i]] : number of items to replace is not a multiple of replacement length
-#and cannot train randomForest
-dataset1[, c("Value", "Wage")] = NULL
-
-#Remove all factor type values that have more than 53 categories
-dataset1[, c("LS", "ST", "RS", "LW", "LF", "CF", "RF", "RW", "LAM", "CAM", "RAM", "LM", "LCM", "CM", "RCM", "RM", "LWB", "LDM", "CDM", "RDM"
-             , "RWB", "LB", "LCB", "CB", "RCB", "RB", "Height")] = NULL
-
 library(randomForest)
 library(rpart.plot)
 
+forest <- randomForest(Label ~., data=dataset1, na.action=na.roughfix)
 
-forest <- randomForest(Label ~., data=dataset1)
-
-forest_predictions = predict(forest, dataset1)
+pred_rf = predict(forest, dataset1)
 
 # confusion matrix to check accuracy
 conf_mx <- table(pred_rf,dataset1$Label)
@@ -218,12 +180,12 @@ rpart.plot(forest)
 
 rf_predictions <- predict(forest, dataset1)
 # confusion matrix to check accuracy
-conf_mx <- table(rf_predictions,dataset1$Label)
+conf_mx <- table(pred_rf,dataset1$Label)
 
-plot(forest, main="Random Forest")
 
 #ROC plot
 library("plotROC")
+library(caret)
 
 #divide whole set to 2 parts 
 inds <- createDataPartition(dataset1$Label, p = 0.75)
@@ -231,7 +193,7 @@ training_set <- dataset1[inds[[1]],]
 test_set  <- dataset1[-inds[[1]],]
 
 
-rf <- randomForest(Label ~., data=training_set)
+rf <- randomForest(Label ~., data=training_set, na.action=na.roughfix, ntree = 100)
 pred_rf <- predict(rf, test_set)
 
 roc_estimate <- calculate_roc(pred_rf, dataset1$Label)
