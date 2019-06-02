@@ -77,6 +77,8 @@ dataset1[, 1] = NULL
 #now it works with them
 # dataset1[, c("Value", "Wage")] = NULL 
 
+dataset1[, c("Reactions")] = NULL
+
 #Remove all factor type values that have more than 53 categories
 dataset1[, c("LS", "ST", "RS", "LW", "LF", "CF", "RF", "RW", "LAM", "CAM", "RAM", "LM", "LCM", "CM", "RCM", "RM", "LWB", "LDM", "CDM", "RDM"
              , "RWB", "LB", "LCB", "CB", "RCB", "RB", "Height")] = NULL
@@ -198,4 +200,32 @@ pred_rf <- predict(rf, test_set)
 
 roc_estimate <- calculate_roc(pred_rf, dataset1$Label)
 single_rocplot <- ggroc(roc_estimate)
+plot_journal_roc
+
+
+######################### badania drzew
+
+fit <- rpart(Label ~., data=dataset1,
+             control=rpart.control(xval = 100))
+
+pred_tree = predict(fit, dataset1, type="class")
+
+conf_mx <- table(pred_tree,dataset1$Label)
+acc1 <- conf_mx[1,1]/(conf_mx[1,1] + conf_mx[1,2]) #bad
+acc2 <- conf_mx[2,2]/(conf_mx[2,2] + conf_mx[2,1]) #good
+accuracy <- (acc1 + acc2) / 2
+prec1 <- conf_mx[1,1] / (conf_mx[1,1] + conf_mx[2,1])
+prec2 <- conf_mx[2,2] / (conf_mx[2,2] + conf_mx[1,2])
+precision <- (prec1 + prec2) / 2
+ok_predictions <- conf_mx[1,1] + conf_mx[2,2]
+accuracy_micro <- ok_predictions/nrow(dataset1)
+
+roc_estimate <- calculate_roc(pred_tree, dataset1$Label)
+single_rocplot <- ggroc(roc_estimate)
 plot_journal_roc(single_rocplot)
+auc_value <- calc_auc(single_rocplot)[1, "AUC"]
+
+
+
+
+
