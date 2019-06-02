@@ -1,7 +1,7 @@
 # read data from csv file
-dat = read.csv("C:\\Users\\£ukasz\\Desktop\\RTut\\FifaPlayersClassification\\data1.csv", header = TRUE, sep = '#')
+dat = read.csv("C:\\Users\\ï¿½ukasz\\Desktop\\RTut\\FifaPlayersClassification\\data1.csv", header = TRUE, sep = '#')
 # remove rows with empty features
-dat_without_empty <- na.omit(dat)
+dat <- na.omit(dat)
 dat_rows <- nrow(dat)
 # calculate 80 centil of Overall feature
 centil_80 = quantile(dat$Overall, seq(0,1, 0.20))[5]
@@ -17,9 +17,69 @@ labels = as.list(labels_mx)
 # remove feature 'Overall'
 dat <- dat[,-8]
 
+# convertion of factor feature to numeric value
+convert_to_numeric_value <- function(amount) {
+  if (nchar(amount) > 3) {
+    without_euro_sign = substr(amount,4,nchar(amount))
+    if (substr(without_euro_sign, nchar(without_euro_sign), nchar(without_euro_sign)) == "K")
+      numeric = as.numeric(substr(without_euro_sign,1,nchar(without_euro_sign)-1))*1000
+    else if (substr(without_euro_sign, nchar(without_euro_sign), nchar(without_euro_sign)) == "M")
+      numeric = as.numeric(substr(without_euro_sign,1,nchar(without_euro_sign)-1))*1000000
+    else
+      numeric = as.numeric(without_euro_sign)
+  }
+  else
+    numeric = as.numeric(amount)
+  return (numeric)
+}
+amount = wagea[1]
+
+convert_weight_values <- function(amount) {
+  numeric = as.numeric(substr(amount,1,nchar(amount)-3))
+  return (numeric)
+}
+
+# convert wage and value column
+wages = as.character(dat$Wage)
+values = as.character(dat$Value)
+wages_converted <- matrix((sapply(wages, convert_to_numeric_value)), nrow(dat), 1)
+values_converted <- matrix((sapply(values, convert_to_numeric_value)), nrow(dat), 1)
+
+dat$Wage <- wages_converted
+dat$Value <- values_converted
+
+#changed this to be numeric values instead of list which cannot be used in training model
+# dataset$Wage <- do.call(rbind, wages_converted)
+# dataset$Value <- do.call(rbind, values_converted)
+
+#delete lbs from weight
+weights = as.character(dat$Weight)
+weights_converted <- matrix((sapply(weights, convert_weight_values)), nrow(dat), 1)
+dat$Weight <- weights_converted
+
 # concatenate feature matrix with labels
 dataset = cbind(dat, labels_mx)
 colnames(dataset)[89] <- "Label"
+
+#corelation between numerical features
+mx = cbind(dat$Age, dat$Potential, dat$Height, dat$Overall)
+correlation_mx = cor(mx)
+
+#copy of dataset
+dataset1 <- dataset
+
+#proposed columns to delete
+dataset1[, c("?.?", "ID", "Name", "Photo", "Flag", "Club.Logo", "Joined", "Nationality",
+            "Club", "Real.Face", "Loaned.From", "Contract.Valid.Until", "Jersey.Number", "Special", "Release.Clause")] = NULL
+dataset1[, 1] = NULL
+#Value and Wage gives Error in x[, i] <- frame[[i]] : number of items to replace is not a multiple of replacement length
+#and cannot train randomForest
+#now it works with them
+# dataset1[, c("Value", "Wage")] = NULL 
+
+#Remove all factor type values that have more than 53 categories
+dataset1[, c("LS", "ST", "RS", "LW", "LF", "CF", "RF", "RW", "LAM", "CAM", "RAM", "LM", "LCM", "CM", "RCM", "RM", "LWB", "LDM", "CDM", "RDM"
+             , "RWB", "LB", "LCB", "CB", "RCB", "RB", "Height")] = NULL
 
 # Naive Bayes Classification
 library(e1071)
@@ -71,40 +131,13 @@ plot(fit, uniform=TRUE,
      main="Classification Tree")
 text(fit, use.n=TRUE, all=TRUE, cex=.8)
 
-# create attractive postscript plot of tree 
-post(fit, file = "C:\\Users\\£ukasz\\Desktop\\RTut\\FifaPlayersClassification\\tree.ps", 
-     title = "Classification Tree")
-
 # prune the tree 
 pfit<- prune(fit, cp=   fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
 
 # plot the pruned tree 
 plot(pfit, uniform=TRUE, 
-     main="Pruned Classification Tree for Kyphosis")
+     main="Pruned Classification Tree")
 text(pfit, use.n=TRUE, all=TRUE, cex=.8)
-post(pfit, file = "c:/ptree.ps", 
-     title = "Pruned Classification Tree for Kyphosis")
-
-#corelation between numerical features
-mx = cbind(dat$Age, dat$Potential, dat$Height, dat$Overall)
-correlation_mx = cor(mx)
-
-
-# convertion of factor feature to numeric value
-convert_to_numeric_value <- function(amount) {
-  if (length(amount) > 3) {
-    without_euro_sign = tail(amount, -3)
-    if (tail(without_euro_sign, 1) == "K")
-      numeric = as.numeric(paste(head(without_euro_sign, -1), collapse = ""))*1000
-    else if (tail(without_euro_sign, 1) == "M")
-      numeric = as.numeric(paste(head(without_euro_sign, -1), collapse = ""))*1000000
-    else
-      numeric = as.numeric(without_euro_sign)
-  }
-  else
-    numeric = as.numeric(paste(amount, collapse = ""))
-    return (numeric)
-}
 
 convert_weight_values <- function(amount) {
   numeric = as.numeric(substr(amount,1,nchar(amount)-3))
@@ -130,7 +163,7 @@ dat$Weight <- weights_converted
 dataset1 <- dataset
 
 #proposed columns to delete
-dataset1[, c("ï.¿", "ID", "Name", "Photo", "Flag", "Club.Logo", "Joined", "Nationality",
+dataset1[, c("ï¿½.ï¿½", "ID", "Name", "Photo", "Flag", "Club.Logo", "Joined", "Nationality",
             "Club", "Real.Face", "Loaned.From", "Contract.Valid.Until", "Jersey.Number", "Special", "Release.Clause", "Potential")] = NULL
 
 
@@ -179,6 +212,16 @@ plot(forest)
 varImp(forest)
 
 
+forest <- randomForest(Label ~., data=dataset1, na.action=na.roughfix, ntree = 100)
+# this line gives Error in rpart.plot(forest) : Not an rpart object
+rpart.plot(forest)
+
+rf_predictions <- predict(forest, dataset1)
+# confusion matrix to check accuracy
+conf_mx <- table(rf_predictions,dataset1$Label)
+
+plot(forest, main="Random Forest")
+
 #ROC plot
 library("plotROC")
 
@@ -191,10 +234,6 @@ test_set  <- dataset1[-inds[[1]],]
 rf <- randomForest(Label ~., data=training_set)
 pred_rf <- predict(rf, test_set)
 
-roc.estimate <- calculate_roc(pred_rf, dataset1$Label)
-single.rocplot <- ggroc(roc.estimate)
-plot_journal_roc(single.rocplot)
-
-
-
-
+roc_estimate <- calculate_roc(pred_rf, dataset1$Label)
+single_rocplot <- ggroc(roc_estimate)
+plot_journal_roc(single_rocplot)
