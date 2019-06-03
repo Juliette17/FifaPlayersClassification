@@ -32,7 +32,6 @@ convert_to_numeric_value <- function(amount) {
     numeric = as.numeric(amount)
   return (numeric)
 }
-amount = wagea[1]
 
 convert_weight_values <- function(amount) {
   numeric = as.numeric(substr(amount,1,nchar(amount)-3))
@@ -57,31 +56,37 @@ weights = as.character(dat$Weight)
 weights_converted <- matrix((sapply(weights, convert_weight_values)), nrow(dat), 1)
 dat$Weight <- weights_converted
 
+#corelation between numerical features
+mx = cbind(dat$Overall, dat$Age, dat$Potential, dat$Value, dat$Wage, dat$Reactions, dat$BallControl)
+correlation_mx = cor(mx)
+
 # concatenate feature matrix with labels
 dataset = cbind(dat, labels_mx)
 colnames(dataset)[89] <- "Label"
 
-#corelation between numerical features
-mx = cbind(dat$Age, dat$Potential, dat$Height, dat$Overall)
-correlation_mx = cor(mx)
+# remove feature 'Overall'
+dat <- dat[,-8]
 
 #copy of dataset
-dataset1 <- dataset
+dataset_copy <- dataset
 
 #proposed columns to delete
-dataset1[, c("ID", "Name", "Photo", "Flag", "Club.Logo", "Joined", "Nationality",
-            "Club", "Real.Face", "Loaned.From", "Contract.Valid.Until", "Jersey.Number", "Special", "Release.Clause")] = NULL
-dataset1[, 1] = NULL
-#Value and Wage gives Error in x[, i] <- frame[[i]] : number of items to replace is not a multiple of replacement length
-#and cannot train randomForest
-#now it works with them
-# dataset1[, c("Value", "Wage")] = NULL 
-
-dataset1[, c("Reactions")] = NULL
+dataset_copy[, c("ID", "Name", "Photo", "Flag", "Club.Logo", "Joined", "Nationality",
+             "Club", "Real.Face", "Loaned.From", "Contract.Valid.Until", "Jersey.Number", 
+             "Special", "Release.Clause", "Value", "Wage", "Reactions", "Potential")] = NULL
+dataset_copy[, 1] = NULL
 
 #Remove all factor type values that have more than 53 categories
-dataset1[, c("LS", "ST", "RS", "LW", "LF", "CF", "RF", "RW", "LAM", "CAM", "RAM", "LM", "LCM", "CM", "RCM", "RM", "LWB", "LDM", "CDM", "RDM"
+dataset_copy[, c("LS", "ST", "RS", "LW", "LF", "CF", "RF", "RW", "LAM", "CAM", "RAM", "LM", "LCM", "CM", "RCM", "RM", "LWB", "LDM", "CDM", "RDM"
              , "RWB", "LB", "LCB", "CB", "RCB", "RB", "Height")] = NULL
+
+set.seed(17)
+
+#divide whole set to 2 parts 
+inds <- createDataPartition(dataset_copy$Label, p = 0.8)
+dataset1 <- dataset_copy[inds[[1]],]
+validation_set  <- dataset_copy[-inds[[1]],]
+
 
 # Naive Bayes Classification
 library(e1071)
@@ -185,15 +190,10 @@ rf_predictions <- predict(forest, dataset1)
 conf_mx <- table(pred_rf,dataset1$Label)
 
 
-#ROC plot
 library("plotROC")
 library(caret)
 
-#divide whole set to 2 parts 
-inds <- createDataPartition(dataset1$Label, p = 0.75)
-training_set <- dataset1[inds[[1]],]
-test_set  <- dataset1[-inds[[1]],]
-
+set.seed(17)
 
 rf <- randomForest(Label ~., data=training_set, na.action=na.roughfix, ntree = 100)
 pred_rf <- predict(rf, test_set)
