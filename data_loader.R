@@ -14,9 +14,6 @@ labels_mx = matrix("bad", dat_rows, 1)
 labels_mx[dat$Overall > centil_80,1] = "good"
 labels = as.list(labels_mx)
 
-# remove feature 'Overall'
-dat <- dat[,-8]
-
 # convertion of factor feature to numeric value
 convert_to_numeric_value <- function(amount) {
   if (nchar(amount) > 3) {
@@ -38,14 +35,18 @@ convert_weight_values <- function(amount) {
   return (numeric)
 }
 
+
 # convert wage and value column
 wages = as.character(dat$Wage)
 values = as.character(dat$Value)
+release_clause = as.character(dat$Release.Clause)
 wages_converted <- matrix((sapply(wages, convert_to_numeric_value)), nrow(dat), 1)
 values_converted <- matrix((sapply(values, convert_to_numeric_value)), nrow(dat), 1)
+release_clauses_converted <- matrix((sapply(release_clause, convert_to_numeric_value)), nrow(dat), 1)
 
 dat$Wage <- wages_converted
 dat$Value <- values_converted
+dat$Release.Clause <- release_clauses_converted
 
 #changed this to be numeric values instead of list which cannot be used in training model
 # dataset$Wage <- do.call(rbind, wages_converted)
@@ -57,15 +58,56 @@ weights_converted <- matrix((sapply(weights, convert_weight_values)), nrow(dat),
 dat$Weight <- weights_converted
 
 #corelation between numerical features
-mx = cbind(dat$Overall, dat$Age, dat$Potential, dat$Value, dat$Wage, dat$Reactions, dat$BallControl)
+# mx = cbind(dat$Overall, dat$Age, dat$Potential, dat$Value, dat$Wage, dat$Reactions, dat$BallControl, dat$Special)
+mx = cbind(dat$Overall, dat$Age, dat$Potential, dat$Value, dat$Wage, dat$Reactions, dat$BallControl, dat$Special, dat[, 55:88])
 correlation_mx = cor(mx)
+mx_to_xls <- data.frame(correlation_mx)
+library(xlsx)
+write.xlsx(mx_to_xls, "D:\\features_correlation.xlsx")
+
+
+dat_statistics = dat
+
+#Remove all factor type values that have more than 53 categories
+dat_statistics[, c("ID", "Name", "Photo", "LS", "Flag", "Club.Logo", "Joined", "Real.Face", "Loaned.From", "Contract.Valid.Until", "Jersey.Number",
+        "ST", "RS", "LW", "LF", "CF", "RF", "RW", "LAM", "CAM", "RAM", "LM", "LCM", "CM", "RCM", "RM", "LWB", "LDM", "CDM", "RDM"
+                 , "RWB", "LB", "LCB", "CB", "RCB", "RB", "Height", "Position")] = NULL
+
+dat_numerical_statistics = dat_statistics
+dat_numerical_statistics[, c("Nationality", "Club", "Work.Rate", "Body.Type", "Value", "Wage", "Release.Clause", "Weight", "Preferred.Foot", "Weak.Foot")] = NULL
+
+
+dat[, 1] = NULL
+
+summaries <- list()
+for (i in 1:ncol(dat_numerical_statistics)) {
+  print(names(dat_numerical_statistics)[i])
+  summaries[[names(dat_numerical_statistics)[i]]] <- summary(dat_numerical_statistics[, i])
+}
+
+summary_mx = rbind(summaries$Age, summaries$Potential, summaries$Special, summaries$International.Reputation, summaries$Skill.Moves, summaries$Crossing
+      , summaries$Finishing, summaries$HeadingAccuracy, summaries$ShortPassing, summaries$Volleys,
+      summaries$Dribbling, summaries$Curve , summaries$FKAccuracy , summaries$LongPassing , summaries$BallControl 
+      , summaries$Acceleration, summaries$SprintSpeed, summaries$Agility , summaries$Reactions ,
+      summaries$Balance , summaries$ShotPower , summaries$Jumping , summaries$Stamina , summaries$Strength , summaries$LongShots 
+      , summaries$Aggression , summaries$Interceptions, summaries$Positioning , summaries$Vision , summaries$Penalties,
+      summaries$Composure, summaries$Marking, summaries$StandingTackle , summaries$SlidingTackle , summaries$GKDiving , 
+      summaries$GKHandling , summaries$GKKicking, summaries$GKPositioning , summaries$GKReflexes)
+
+write.xlsx(summary_mx, "D:\\summaries.xlsx")
+
+summaries <- list()
+for (i in 1:ncol(dat_statistics)) {
+  print(names(dat_statistics)[i])
+  summaries[[names(dat_statistics)[i]]] <- summary(dat_statistics[, i])
+}
+
+# remove feature 'Overall'
+dat <- dat[,-8]
 
 # concatenate feature matrix with labels
 dataset = cbind(dat, labels_mx)
 colnames(dataset)[89] <- "Label"
-
-# remove feature 'Overall'
-dat <- dat[,-8]
 
 #copy of dataset
 dataset_copy <- dataset
@@ -74,7 +116,7 @@ dataset_copy <- dataset
 dataset_copy[, c("ID", "Name", "Photo", "Flag", "Club.Logo", "Joined", "Nationality",
              "Club", "Real.Face", "Loaned.From", "Contract.Valid.Until", "Jersey.Number", 
              "Special", "Release.Clause", "Value", "Wage", "Reactions", "Potential")] = NULL
-dataset_copy[, 1] = NULL
+
 
 #Remove all factor type values that have more than 53 categories
 dataset_copy[, c("LS", "ST", "RS", "LW", "LF", "CF", "RF", "RW", "LAM", "CAM", "RAM", "LM", "LCM", "CM", "RCM", "RM", "LWB", "LDM", "CDM", "RDM"
@@ -83,20 +125,25 @@ dataset_copy[, c("LS", "ST", "RS", "LW", "LF", "CF", "RF", "RW", "LAM", "CAM", "
 set.seed(17)
 
 #divide whole set to 2 parts 
-inds <- createDataPartition(dataset_copy$Label, p = 0.8)
+inds <- createDataPartition(dataset_copy$Label, p = 0.5)
 dataset1 <- dataset_copy[inds[[1]],]
 validation_set  <- dataset_copy[-inds[[1]],]
 
-
+library(plotROC)
 # Naive Bayes Classification
 library(e1071)
+library(caret)
 
 # fit the Naive Bayes model with the whole dataset
-Naive_Bayes_Model=naiveBayes(Label ~., data=dataset1)
-# predict on the same dataset
-NB_Predictions=predict(Naive_Bayes_Model, dataset1)
+Naive_Bayes_Model= train(Label ~ ., 
+                         data = dataset1,
+                         method = 'nb',
+                         trControl = trainControl(method='cv',number=10),
+                         tuneLength = 15)
+# predict on the validation dataset
+NB_Predictions=predict(Naive_Bayes_Model, validation_set)
 # confusion matrix to check accuracy
-conf_mx <- table(NB_Predictions,dataset1$Label)
+conf_mx <- table(NB_Predictions,validation_set$Label)
 
 #macro-averaging
 # accuracy for class 'bad' = 0.9786
@@ -117,34 +164,13 @@ precision <- (prec1 + prec2) / 2
 # number of good predictions
 ok_predictions <- conf_mx[1,1] + conf_mx[2,2]
 # micro_averaged accuracy = 0.917 for fitting on full dataset and before feature selection
-accuracy_micro <- ok_predictions/nrow(dataset1)
+accuracy_micro <- ok_predictions/nrow(validation_set)
+output = data.frame(accuracy, accuracy_micro, precision)
 
-
-# Decision Tree simple classification
-library(rpart)
-
-# grow tree 
-fit <- rpart(Label ~.,
-             method="class", data=dataset1)
-
-fit_predict = predict(fit, dataset1)
-
-printcp(fit) # display the results 
-plotcp(fit) # visualize cross-validation results 
-summary(fit) # detailed summary of splits
-
-# plot tree 
-plot(fit, uniform=TRUE, 
-     main="Classification Tree")
-text(fit, use.n=TRUE, all=TRUE, cex=.8)
-
-# prune the tree 
-pfit<- prune(fit, cp=   fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
-
-# plot the pruned tree 
-plot(pfit, uniform=TRUE, 
-     main="Pruned Classification Tree")
-text(pfit, use.n=TRUE, all=TRUE, cex=.8)
+roc_estimate <- calculate_roc(NB_Predictions, validation_set$Label)
+single_rocplot <- ggroc(roc_estimate)
+plot_journal_roc(single_rocplot)
+auc_value <- calc_auc(single_rocplot)[1, "AUC"]
 
 library(randomForest)
 library(rpart.plot)
@@ -180,34 +206,12 @@ accuracy_micro <- ok_predictions/nrow(dataset1)
 plot(forest)
 varImp(forest)
 
-
-forest <- randomForest(Label ~., data=dataset1, na.action=na.roughfix, ntree = 100)
-# this line gives Error in rpart.plot(forest) : Not an rpart object
-rpart.plot(forest)
-
-rf_predictions <- predict(forest, dataset1)
-# confusion matrix to check accuracy
-conf_mx <- table(pred_rf,dataset1$Label)
-
-
-library("plotROC")
-library(caret)
-
-set.seed(17)
-
-rf <- randomForest(Label ~., data=training_set, na.action=na.roughfix, ntree = 100)
-pred_rf <- predict(rf, test_set)
-
-roc_estimate <- calculate_roc(pred_rf, dataset1$Label)
-single_rocplot <- ggroc(roc_estimate)
-plot_journal_roc
-
-
 ######################### badania drzew
+library(rpart)
 output <- NULL
-for (param in 1:100){
+for (param in 2:10){
   fit <- rpart(Label ~., data=dataset1,
-               control=rpart.control(maxdepth = param))
+               control=rpart.control(maxdepth = 3))
   
   pred_tree = predict(fit, dataset1, type="class")
   
@@ -228,7 +232,102 @@ for (param in 1:100){
   output = rbind(output, data.frame(accuracy, accuracy_micro, precision))
 }
 
+caret.control <- trainControl(method = "repeatedcv",
+                              number = 10,
+                              repeats = 3)
 
 
+# Use caret to train the rpart decision tree using 10-fold cross 
+# validation repeated 3 times and use 15 values for tuning the
+# cp parameter for rpart. This code returns the best model trained
+# on all the data! Mighty!
+rpart.cv <- train(Label ~ ., 
+                  data = dataset1,
+                  method = "rpart",
+                  trControl = caret.control,
+                  tuneLength = 15, maxdepth=5, minsplit = 25, minbucket = 5, cp = 0.01)
+
+pred_tree = predict(fit, validation_set, type="class")
+
+conf_mx <- table(pred_tree,validation_set$Label)
+acc1 <- conf_mx[1,1]/(conf_mx[1,1] + conf_mx[1,2]) #bad
+acc2 <- conf_mx[2,2]/(conf_mx[2,2] + conf_mx[2,1]) #good
+accuracy <- (acc1 + acc2) / 2
+prec1 <- conf_mx[1,1] / (conf_mx[1,1] + conf_mx[2,1])
+prec2 <- conf_mx[2,2] / (conf_mx[2,2] + conf_mx[1,2])
+precision <- (prec1 + prec2) / 2
+ok_predictions <- conf_mx[1,1] + conf_mx[2,2]
+accuracy_micro <- ok_predictions/nrow(validation_set)
+
+output = data.frame(accuracy, accuracy_micro, precision)
+
+#random forest tests
+
+library(randomForest)
+library(mlbench)
+library(caret)
+
+tuneRF(dataset = dataset1, mtryStart = , ntreeTry=50, stepFactor=2, improve=0.05,
+       trace=TRUE, plot=TRUE, doBest=FALSE, ...)
+
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+metric <- "Accuracy"
+set.seed(17)
+mtry <- sqrt(ncol(dataset1)-1)
+tunegrid <- expand.grid(.mtry=mtry)
+rf_default <- train(Label~., data=dataset1, method="rf", metric=metric, tuneGrid=tunegrid, trControl=control, ntree = 500)
+print(rf_default)
+
+control <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid")
+tunegrid <- expand.grid(.mtry=c(sqrt(ncol(dataset1)-1)))
+modellist <- list()
+set.seed(17)
+for (ntree in c(50, 100, 200, 500, 1000, 1500, 2000, 2500)) {
+  fit <- train(Label~., data=dataset1, method="rf", metric=metric, tuneGrid=tunegrid, trControl=control, ntree=ntree)
+  print(ntree)
+  key <- toString(ntree)
+  modellist[[key]] <- fit
+}
+# compare results
+results <- resamples(modellist)
+summary(results)
+dotplot(results)
+
+modellist_maxnodes <- list()
+for (max_nodes in c(5, 7, 9, 11, 13, 15, 17, 18, 21, 23, 25)) {
+  for (minsplit in c(10, 20, 20, 30, 40, 50, 60)) {
+  fit <- train(Label~., data=dataset1, method="rf", metric=metric, tuneGrid=tunegrid, trControl=control, ntree=500, maxnodes = max_nodes, minsplit = minsplit)
+  print(ntree)
+  key <- toString(max_nodes)
+  modellist_maxnodes[[max_nodes]] <- fit
+  }
+}
+rf_predict = predict(fit, dataset1)
+
+conf_mx <- table(rf_predict,dataset1$Label)
+acc1 <- conf_mx[1,1]/(conf_mx[1,1] + conf_mx[1,2]) #bad
+acc2 <- conf_mx[2,2]/(conf_mx[2,2] + conf_mx[2,1]) #good
+accuracy <- (acc1 + acc2) / 2
+prec1 <- conf_mx[1,1] / (conf_mx[1,1] + conf_mx[2,1])
+prec2 <- conf_mx[2,2] / (conf_mx[2,2] + conf_mx[1,2])
+precision <- (prec1 + prec2) / 2
+ok_predictions <- conf_mx[1,1] + conf_mx[2,2]
+accuracy_micro <- ok_predictions/nrow(dataset1)
+
+rf_raining_output = data.frame(accuracy, accuracy_micro, precision)
+
+rf_predict = predict(fit, validation_set)
+
+conf_mx <- table(rf_predict,validation_set$Label)
+acc1 <- conf_mx[1,1]/(conf_mx[1,1] + conf_mx[1,2]) #bad
+acc2 <- conf_mx[2,2]/(conf_mx[2,2] + conf_mx[2,1]) #good
+accuracy <- (acc1 + acc2) / 2
+prec1 <- conf_mx[1,1] / (conf_mx[1,1] + conf_mx[2,1])
+prec2 <- conf_mx[2,2] / (conf_mx[2,2] + conf_mx[1,2])
+precision <- (prec1 + prec2) / 2
+ok_predictions <- conf_mx[1,1] + conf_mx[2,2]
+accuracy_micro <- ok_predictions/nrow(validation_set)
+
+rf_output = data.frame(accuracy, accuracy_micro, precision)
 
 
